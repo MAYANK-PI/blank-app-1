@@ -1,24 +1,35 @@
 import streamlit as st
 import numpy as np
+import os
+from PIL import Image
 import tensorflow as tf
 from tensorflow.keras.preprocessing import image as kimage
 from tensorflow.keras.applications.inception_v3 import InceptionV3, preprocess_input
 from tensorflow.keras.models import Model
 from tensorflow.keras.layers import Input, Dropout, Dense, LSTM, Embedding, Add, Conv2D, MaxPooling2D, Conv2DTranspose, concatenate
 from tensorflow.keras.preprocessing.sequence import pad_sequences
-from PIL import Image
 import matplotlib.pyplot as plt
 
 st.set_page_config(page_title="Image Segmentation + Captioning", layout="wide")
 st.title("🖼️ Image Segmentation + Caption Generation (U-Net + CNN-LSTM)")
 
 # ----------------------------------------
-# 1️⃣ Upload image
+# 1️⃣ Load images from repo folder
 # ----------------------------------------
-uploaded_files = st.file_uploader("Upload one or more images", type=["jpg", "jpeg", "png"], accept_multiple_files=True)
+IMAGE_DIR = "images"
 
-if uploaded_files:
-    st.success(f"{len(uploaded_files)} image(s) uploaded successfully!")
+if not os.path.exists(IMAGE_DIR):
+    st.error(f"❌ Folder '{IMAGE_DIR}' not found! Please add it to your repo.")
+    st.stop()
+
+image_files = [os.path.join(IMAGE_DIR, f) for f in os.listdir(IMAGE_DIR)
+               if f.lower().endswith(('.jpg', '.jpeg', '.png'))]
+
+if not image_files:
+    st.warning("No images found in the 'images/' folder.")
+    st.stop()
+
+st.success(f"📁 Found {len(image_files)} image(s) in '{IMAGE_DIR}'")
 
 # ----------------------------------------
 # 2️⃣ CNN Feature Extractor (InceptionV3)
@@ -32,7 +43,7 @@ def load_cnn_encoder():
 cnn_encoder = load_cnn_encoder()
 
 # ----------------------------------------
-# 3️⃣ Simple Caption Generator (Pretrained Mock)
+# 3️⃣ Caption Generator (mock CNN-LSTM)
 # ----------------------------------------
 @st.cache_resource
 def load_caption_model(vocab_size=5000, max_length=20):
@@ -54,16 +65,14 @@ def load_caption_model(vocab_size=5000, max_length=20):
 
 caption_model = load_caption_model()
 
-# Dummy tokenizer and vocab
-tokenizer = {"startseq": 1, "endseq": 2}
 max_length = 20
 
 def generate_caption(model, feature):
-    # For demonstration, return dummy text
-    return "a beautiful natural scene with trees and sky"
+    # For now, just return a fixed sentence
+    return "a beautiful view of nature with sky and trees"
 
 # ----------------------------------------
-# 4️⃣ U-Net for Image Segmentation
+# 4️⃣ U-Net for Segmentation
 # ----------------------------------------
 def build_unet(input_size=(128, 128, 3)):
     inputs = Input(input_size)
@@ -93,34 +102,32 @@ def build_unet(input_size=(128, 128, 3)):
     return model
 
 unet_model = build_unet()
-st.sidebar.write("✅ Models loaded successfully")
 
 # ----------------------------------------
-# 5️⃣ Process Each Uploaded Image
+# 5️⃣ Process all images in the folder
 # ----------------------------------------
-if uploaded_files:
-    for idx, file in enumerate(uploaded_files):
-        st.subheader(f"Image {idx + 1}")
+for idx, img_path in enumerate(image_files):
+    st.subheader(f"Image {idx + 1}: {os.path.basename(img_path)}")
 
-        img = Image.open(file).convert("RGB")
-        img_resized = img.resize((299, 299))
-        x = np.expand_dims(kimage.img_to_array(img_resized), axis=0)
-        x = preprocess_input(x)
+    img = Image.open(img_path).convert("RGB")
+    img_resized = img.resize((299, 299))
+    x = np.expand_dims(kimage.img_to_array(img_resized), axis=0)
+    x = preprocess_input(x)
 
-        # Feature extraction
-        feature = cnn_encoder.predict(x, verbose=0)
-        caption = generate_caption(caption_model, feature)
+    # CNN Feature extraction
+    feature = cnn_encoder.predict(x, verbose=0)
+    caption = generate_caption(caption_model, feature)
 
-        # Segmentation
-        img_small = img.resize((128, 128))
-        img_arr = np.expand_dims(np.array(img_small) / 255.0, axis=0)
-        mask = unet_model.predict(img_arr, verbose=0)[0].squeeze()
+    # U-Net segmentation
+    img_small = img.resize((128, 128))
+    img_arr = np.expand_dims(np.array(img_small) / 255.0, axis=0)
+    mask = unet_model.predict(img_arr, verbose=0)[0].squeeze()
 
-        # Display
-        col1, col2 = st.columns(2)
-        with col1:
-            st.image(img, caption="Original Image", use_container_width=True)
-        with col2:
-            st.image(mask, caption="Predicted Segmentation Mask", use_container_width=True)
+    # Display
+    col1, col2 = st.columns(2)
+    with col1:
+        st.image(img, caption="Original Image", use_container_width=True)
+    with col2:
+        st.image(mask, caption="Predicted Segmentation Mask", use_container_width=True)
 
-        st.write(f"📝 **Generated Caption:** {caption}")
+    st.write(f"📝 **Generated Caption:** {caption}")
