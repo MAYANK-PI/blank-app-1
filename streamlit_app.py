@@ -16,7 +16,7 @@ st.title("🖼️ Image Segmentation + Caption Generation (U-Net + CNN-LSTM)")
 # ----------------------------------------
 # 1️⃣ Load images from repo folder
 # ----------------------------------------
-IMAGE_DIR = "images"
+IMAGE_DIR = "image"
 
 if not os.path.exists(IMAGE_DIR):
     st.error(f"❌ Folder '{IMAGE_DIR}' not found! Please add it to your repo.")
